@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>WOLF LABS | The Profiler (A1)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Fonts: Space Mono (Terminal) & Inter (Readability) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* === THE PROFILER VARIABLES (MI6/INTERPOL THEME) === */
+        :root {
+            --bg-matrix: #0A0A0A;      /* Obsidian Black */
+            --bg-panel: #141414;       /* Kevlar Gray */
+            --bg-card: #1A1A1A;        /* Lighter Kevlar */
+            --accent-amber: #FFB703;   /* Amber Alert (Primary Action) */
+            --accent-cyan: #00F0FF;    /* Forensic Cyan (Success/Data) */
+            --accent-red: #D90429;     /* Critical Red */
+            --text-main: #F8F9FA;
+            --text-muted: #6C757D;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-matrix);
+            color: var(--text-main);
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .font-terminal { font-family: 'Space Mono', monospace; }
+
+        /* CRT SCANLINE EFFECT */
+        .scanlines {
+            position: fixed; inset: 0; pointer-events: none; z-index: 50;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px; opacity: 0.15;
+        }
+
+        /* HUD TOP */
+        #hud-top {
+            position: fixed; top: 0; left: 0; right: 0; padding: 15px 30px;
+            background: linear-gradient(to bottom, rgba(10,10,10,0.95) 0%, transparent);
+            z-index: 1000; border-bottom: 1px solid rgba(255, 183, 3, 0.2);
+        }
+
+        .hud-bar-container { width: 120px; height: 4px; background: rgba(255,255,255,0.1); overflow: hidden; border-radius: 2px;}
+        .hud-bar-fill { height: 100%; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* CONTENT ARENA */
+        #mission-arena { height: 100vh; padding-bottom: 100px; }
+
+        /* INTEL PANELS (Cards) */
+        .intel-card {
+            background-color: var(--bg-card);
+            border: 1px solid rgba(255, 183, 3, 0.15);
+            border-radius: 4px; /* Sharp edges for tactical feel */
+            padding: 2.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), inset 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        /* Tactical Corner Accents */
+        .intel-card::before, .intel-card::after { content: ''; position: absolute; width: 15px; height: 15px; border: 2px solid transparent; pointer-events: none; }
+        .intel-card::before { top: -1px; left: -1px; border-top-color: var(--accent-amber); border-left-color: var(--accent-amber); }
+        .intel-card::after { bottom: -1px; right: -1px; border-bottom-color: var(--accent-amber); border-right-color: var(--accent-amber); }
+
+        /* BUTTONS */
+        .btn-amber {
+            background: var(--accent-amber); color: #000; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.1em; transition: all 0.2s ease; border: none; cursor: pointer; font-family: 'Space Mono', monospace;
+            box-shadow: 0 0 15px rgba(255, 183, 3, 0.2); border-radius: 2px;
+        }
+        .btn-amber:active { transform: scale(0.96); }
+        .btn-amber:hover { box-shadow: 0 0 25px rgba(255, 183, 3, 0.5); background: #ffc300; transform: translateY(-2px); }
+
+        .btn-cyan {
+            background: rgba(0, 240, 255, 0.1); border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s ease; cursor: pointer; font-family: 'Space Mono', monospace; border-radius: 2px;
+        }
+        .btn-cyan:hover { background: var(--accent-cyan); color: #000; box-shadow: 0 0 20px rgba(0, 240, 255, 0.4); }
+        
+        .btn-outline {
+            background: transparent; border: 1px solid var(--text-muted); color: var(--text-main);
+            font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s ease; cursor: pointer; font-family: 'Space Mono', monospace; border-radius: 2px;
+        }
+        .btn-outline:hover { border-color: var(--accent-amber); color: var(--accent-amber); background: rgba(255, 183, 3, 0.05); }
+
+        /* DATA ROWS (MCQ) */
+        .data-row {
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+            transition: all 0.2s ease; cursor: pointer; display: flex; align-items: center; padding: 1.2rem; border-radius: 4px;
+        }
+        .data-row:hover:not(.locked-check) { background: rgba(255, 183, 3, 0.05); border-color: rgba(255, 183, 3, 0.3); transform: translateX(5px); }
+        .data-row.correct { background: rgba(0, 240, 255, 0.1); border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: inset 0 0 10px rgba(0,240,255,0.2); }
+        .data-row.wrong { background: rgba(217, 4, 41, 0.1); border-color: var(--accent-red); color: var(--accent-red); }
+
+        /* FINGERPRINT TOGGLE (Age fix) */
+        .tuner-checkbox:checked + .tuner-label { background-color: var(--accent-cyan); border-color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0,240,255,0.4); }
+        .tuner-checkbox:checked + .tuner-label .tuner-knob { transform: translateX(100%); background-color: #000; }
+
+        /* WIRETAP KEYPAD */
+        .keypad-btn {
+            background: #1A1A1A; border: 1px solid #333; color: white; font-family: 'Space Mono'; font-size: 1.5rem; font-weight: bold;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 70px; border-radius: 8px; cursor: pointer; transition: all 0.1s;
+            box-shadow: 0 4px 0 #000;
+        }
+        .keypad-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #000; background: rgba(255, 183, 3, 0.2); border-color: var(--accent-amber); color: var(--accent-amber);}
+        .keypad-sub { font-size: 0.6rem; color: #666; letter-spacing: 2px; margin-top: 2px;}
+
+        /* REDACTED TEXT (Censored blocks) */
+        .censored-block {
+            background-color: var(--text-main); color: var(--text-main); padding: 0 8px; cursor: pointer; transition: all 0.3s; font-family: 'Space Mono'; display: inline-block; line-height: 1; border-radius: 2px;
+        }
+        .censored-block:hover { opacity: 0.8; }
+        .censored-block.revealed { background-color: rgba(0, 240, 255, 0.1); color: var(--accent-cyan); border-bottom: 2px solid var(--accent-cyan); cursor: default; }
+
+        /* THE FIXER (Corrupted Code) */
+        .bug-word { color: var(--accent-red); border-bottom: 2px dashed var(--accent-red); cursor: pointer; font-weight: bold; transition: all 0.2s; padding: 0 4px; background: rgba(217,4,41,0.1); font-family: 'Space Mono'; }
+        .bug-word:hover { background: rgba(217,4,41,0.2); }
+        .bug-fixed { color: var(--accent-cyan); pointer-events: none; font-weight: bold; border-bottom: 2px solid var(--accent-cyan); font-family: 'Space Mono'; text-shadow: 0 0 5px var(--accent-cyan);}
+
+        /* WORD BUILDER (Data Packets) */
+        .wb-pill { background-color: #1A1A1A; padding: 12px 24px; font-weight: 700; cursor: pointer; transition: all 0.2s; display: inline-block; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; font-family: 'Space Mono'; }
+        .wb-pill:hover { background-color: var(--accent-amber); color: #000; transform: translateY(-3px); border-color: var(--accent-amber); box-shadow: 0 5px 15px rgba(255, 183, 3, 0.3);}
+        .wb-pill.used { opacity: 0; pointer-events: none; transform: scale(0.5); }
+        .wb-dropzone { min-height: 80px; border-bottom: 2px dashed #444; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 15px; width: 100%; max-width: 800px; margin: 0 auto; }
+        .pill-in-zone { background-color: var(--accent-cyan); color: #000; padding: 12px 24px; font-weight: 700; cursor: default; animation: popIn 0.3s ease; border-radius: 4px; font-family: 'Space Mono'; box-shadow: 0 0 10px rgba(0,240,255,0.3);}
+
+        /* FOOTER CONSOLE */
+        #nav-console {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: 70px;
+            background: rgba(10, 10, 10, 0.95); border-top: 1px solid rgba(255, 183, 3, 0.15);
+            display: flex; justify-content: space-between; align-items: center; px-8; z-index: 5000;
+        }
+
+        /* DRAWERS */
+        .drawer { background: #0F0F0F; color: var(--text-main); border-left: 1px solid rgba(255, 183, 3, 0.2); transform: translateX(100%); transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1); z-index: 5100; box-shadow: -10px 0 40px rgba(0,0,0,0.9);}
+        .drawer.active { transform: translateX(0); }
+
+        .fade-in { animation: fadeIn 0.4s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .flicker { animation: flicker 3s infinite; }
+        @keyframes flicker { 0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; } 20%, 24%, 55% { opacity: 0.5; } }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #333; }
+
+        #confetti-canvas { position: fixed; inset: 0; pointer-events: none; z-index: 9999; }
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake { 10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(3px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-5px, 0, 0); } 40%, 60% { transform: translate3d(5px, 0, 0); } }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-sm">
+
+    <div class="scanlines"></div>
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- HUD SUPERIOR -->
+    <div id="hud-top" class="hidden justify-between items-center w-full">
+        <div class="flex items-center gap-8">
+            <div class="flex flex-col gap-1">
+                <span class="text-[9px] font-bold text-[#666] uppercase tracking-[0.3em] font-terminal">Threat Level (HP)</span>
+                <div class="hud-bar-container"><div id="hp-bar" class="hud-bar-fill bg-[var(--accent-red)]" style="width: 100%;"></div></div>
+            </div>
+            <div class="flex flex-col gap-1">
+                <span class="text-[9px] font-bold text-[#666] uppercase tracking-[0.3em] font-terminal">Data Mined (XP)</span>
+                <div class="hud-bar-container"><div id="xp-bar" class="hud-bar-fill bg-[var(--accent-cyan)]" style="width: 0%;"></div></div>
+            </div>
+        </div>
+        <div class="text-right flex items-center gap-6">
+            <button onclick="toggleTeacherHUD()" class="px-4 py-1.5 border border-white/10 text-[10px] uppercase tracking-widest text-white hover:bg-white/5 transition-all font-bold font-terminal"><i class="fas fa-user-secret mr-2"></i>Director</button>
+            <div>
+                <p class="font-terminal text-lg font-black text-white tracking-widest leading-none uppercase">WOLF LABS</p>
+                <p class="text-[8px] font-bold text-[var(--accent-amber)] tracking-[0.4em] uppercase mt-1 font-terminal">A1 Intelligence</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAINEL PRINCIPAL (CAPA) -->
+    <main id="dashboard" class="flex-grow flex flex-col items-center justify-center relative z-10 px-6">
+        <button onclick="toggleFullscreen()" class="absolute top-6 right-8 text-white/50 hover:text-white text-xl" title="Fullscreen"><i class="fas fa-expand"></i></button>
+        <div class="max-w-5xl w-full flex flex-col items-center text-center space-y-8 animate-in fade-in">
+            <div class="w-24 h-24 rounded-lg bg-[var(--accent-amber)]/10 mb-2 flex items-center justify-center border border-[var(--accent-amber)]/30 shadow-[0_0_30px_rgba(255,183,3,0.2)]">
+                <i class="fas fa-fingerprint text-5xl text-[var(--accent-amber)]"></i>
+            </div>
+            
+            <div class="space-y-4">
+                <p class="text-[var(--accent-amber)] font-bold text-xs tracking-[0.6em] uppercase font-terminal flicker">Classified Database</p>
+                <h1 class="text-6xl md:text-8xl font-black text-white leading-none tracking-tighter uppercase font-terminal drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">THE <span class="text-[var(--accent-cyan)]">PROFILER</span></h1>
+                <p class="text-xl text-[#888] mt-4 max-w-2xl mx-auto leading-relaxed">Personal Information, Spelling, Phone Numbers & Ages.</p>
+            </div>
+            
+            <div class="flex flex-wrap justify-center gap-3 mt-8 font-terminal">
+                <span class="px-4 py-1.5 border border-[var(--accent-cyan)]/30 bg-[var(--accent-cyan)]/5 text-[10px] font-bold uppercase tracking-widest text-[var(--accent-cyan)]">Verb To Be</span>
+                <span class="px-4 py-1.5 border border-white/20 bg-white/5 text-[10px] font-bold uppercase tracking-widest text-white">Numbers & Contacts</span>
+                <span class="px-4 py-1.5 border border-white/20 bg-white/5 text-[10px] font-bold uppercase tracking-widest text-white">Alphabet & Reading</span>
+            </div>
+            
+            <button onclick="startMission()" class="mt-12 btn-amber px-14 py-5 text-lg">
+                Access Database
+            </button>
+            <p class="text-[10px] text-[#555] mt-6 uppercase tracking-widest font-terminal"><i class="fas fa-mouse-pointer mr-2"></i> Double-click any English word to scan archives</p>
+        </div>
+    </main>
+
+    <!-- ARENA DE CONTEÚDO DA LIÇÃO -->
+    <main id="mission-arena" class="hidden flex-grow flex-col overflow-hidden relative">
+        <div id="mission-content" class="flex-grow overflow-y-auto px-6 py-24 flex flex-col items-center w-full"></div>
+    </main>
+
+    <!-- CONSOLA DE NAVEGAÇÃO -->
+    <footer id="nav-console" class="hidden px-8 font-terminal">
+        <div class="flex items-center gap-6 w-1/4">
+            <button onclick="goHome()" class="text-[#555] hover:text-[var(--accent-red)] transition-colors"><i class="fas fa-power-off text-xl"></i></button>
+            <div class="flex flex-col">
+                <span id="console-title" class="text-[10px] font-bold text-white uppercase tracking-widest truncate">System</span>
+                <span id="console-type" class="text-[8px] font-bold text-[var(--accent-amber)] uppercase tracking-widest">Type</span>
+            </div>
+        </div>
+        <div class="flex flex-col items-center gap-3 w-1/2">
+            <div class="flex items-center gap-12">
+                <button onclick="prevStep()" class="text-white/30 hover:text-white transition-colors"><i class="fas fa-angle-left text-2xl"></i></button>
+                <div class="w-64 h-1 bg-white/10 overflow-hidden rounded-full">
+                    <div id="progress-bar" class="h-full bg-[var(--accent-amber)] transition-all duration-300 shadow-[0_0_10px_rgba(255,183,3,0.5)]" style="width: 0%;"></div>
+                </div>
+                <button onclick="nextStep()" class="text-white hover:text-[var(--accent-amber)] transition-colors"><i class="fas fa-angle-right text-2xl"></i></button>
+            </div>
+        </div>
+        <div class="flex items-center justify-end gap-6 w-1/4">
+            <button onclick="toggleWhiteboard()" class="text-[#555] hover:text-white transition-colors" title="Investigator Notepad"><i class="fas fa-clipboard-list text-lg"></i></button>
+            <button onclick="toggleLessonNavigator()" class="text-[#555] hover:text-white transition-colors" title="Case Index"><i class="fas fa-folder-open text-lg"></i></button>
+        </div>
+    </footer>
+
+    <!-- GAVETAS LATERAIS (DRAWERS) -->
+    <aside id="whiteboard" class="fixed right-0 top-0 h-screen w-[450px] drawer flex flex-col pt-20 z-[5100]">
+        <div class="p-6 border-b border-white/5 flex justify-between items-center bg-[#0F0F0F]">
+            <h2 class="text-lg font-bold text-[var(--accent-amber)] tracking-widest uppercase font-terminal"><i class="fas fa-user-secret mr-2"></i> Field Notes</h2>
+            <button onclick="toggleWhiteboard()" class="text-white/50 hover:text-white"><i class="fas fa-times text-lg"></i></button>
+        </div>
+        <div class="p-4 bg-black/40 flex flex-wrap gap-2 border-b border-white/5">
+            <button onclick="insertTag('[SUSPECT]')" class="text-[9px] font-terminal border border-white/20 text-[#ccc] px-3 py-1 hover:bg-white hover:text-black transition-all font-bold uppercase tracking-widest">Suspect</button>
+            <button onclick="insertTag('[CLUE]')" class="text-[9px] font-terminal border border-[var(--accent-cyan)] text-[var(--accent-cyan)] px-3 py-1 hover:bg-[var(--accent-cyan)] hover:text-black transition-all font-bold uppercase tracking-widest">Clue</button>
+        </div>
+        <textarea id="wb-text" class="flex-grow bg-transparent text-white p-6 resize-none focus:outline-none text-sm font-terminal leading-relaxed" placeholder="> Input observational data..."></textarea>
+    </aside>
+
+    <aside id="lesson-navigator" class="fixed right-0 top-0 h-screen w-80 drawer flex flex-col pt-20 z-[5100]">
+        <div class="p-6 border-b border-white/5 text-white font-bold uppercase tracking-widest flex justify-between items-center text-sm font-terminal bg-[#0F0F0F]">Case Index <button onclick="toggleLessonNavigator()"><i class="fas fa-times text-white/50 hover:text-white"></i></button></div>
+        <div id="nav-steps-list" class="flex-grow overflow-y-auto p-4 space-y-1 bg-[#141414] font-terminal"></div>
+    </aside>
+
+    <aside id="smart-dict" class="fixed right-0 top-0 h-screen w-[400px] drawer flex flex-col pt-20 z-[5100]">
+        <div class="p-6 border-b border-white/5 flex justify-between items-center bg-[#0F0F0F]">
+            <h2 class="text-lg font-bold text-[var(--accent-cyan)] tracking-widest uppercase font-terminal"><i class="fas fa-database mr-2"></i> Interpol DB</h2>
+            <button onclick="toggleDict()"><i class="fas fa-times text-lg text-white/50 hover:text-white"></i></button>
+        </div>
+        <div id="dict-content" class="flex-grow overflow-y-auto p-6 bg-[#141414] text-white">
+            <div class="flex flex-col items-center justify-center h-full text-center opacity-30">
+                <i class="fas fa-search text-4xl mb-4"></i>
+                <p class="font-terminal text-xs uppercase tracking-widest">Double-click word to query DB.</p>
+            </div>
+        </div>
+    </aside>
+
+    <aside id="teacher-hud" class="fixed right-0 top-0 h-screen w-[350px] drawer flex flex-col pt-20 z-[5100]">
+        <div class="p-6 border-b border-white/5 flex justify-between items-center bg-[#0F0F0F]">
+            <h2 class="text-lg font-bold text-white tracking-widest uppercase font-terminal"><i class="fas fa-eye mr-2"></i> Director</h2>
+            <button onclick="toggleTeacherHUD()"><i class="fas fa-times text-lg text-white/50 hover:text-white"></i></button>
+        </div>
+        <div class="flex-grow overflow-y-auto p-6 space-y-8 bg-[#141414]">
+            <div class="bg-black/50 p-5 border border-white/10 rounded">
+                <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-widest mb-3 font-terminal">Target Focus</p>
+                <p class="text-xs text-[#ccc] leading-relaxed">Level A1. Correct the 'I have X years' mistake. Practice numbers (tens vs teens), phone numbers (Oh, Double), and alphabet (A, E, I).</p>
+            </div>
+            <div>
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4 font-terminal">Mission Feedback</p>
+                <div class="space-y-3 font-terminal">
+                    <button onclick="triggerPraise('VERIFIED', 'Data accurate.')" class="w-full py-3 bg-[var(--accent-cyan)]/10 text-[var(--accent-cyan)] border border-[var(--accent-cyan)]/50 font-bold text-xs hover:bg-[var(--accent-cyan)] hover:text-black transition-all tracking-widest uppercase">SEND: CYAN (GOOD)</button>
+                    <button onclick="triggerPraise('EXCELLENT', 'Perfect English.')" class="w-full py-3 bg-[var(--accent-amber)]/10 text-[var(--accent-amber)] border border-[var(--accent-amber)]/50 font-bold text-xs hover:bg-[var(--accent-amber)] hover:text-black transition-all tracking-widest uppercase">SEND: AMBER (PERFECT)</button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Overlay de Elogio (Praise) -->
+    <div id="praise-overlay" class="fixed inset-0 z-[6000] flex items-center justify-center bg-black/80 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 p-4">
+        <div id="praise-card" class="bg-[#141414] p-16 text-center transform scale-50 transition-transform duration-500 border-t-4 border-[var(--accent-cyan)] shadow-[0_10px_50px_rgba(0,240,255,0.2)]">
+            <h2 id="praise-main" class="text-5xl md:text-7xl font-black tracking-tighter uppercase mb-4 text-[var(--accent-cyan)] font-terminal"></h2>
+            <p id="praise-sub" class="text-sm font-bold tracking-widest uppercase text-white mt-6 opacity-80 font-terminal"></p>
+        </div>
+    </div>
+
+    <!-- SCRIPT DO MOTOR PRINCIPAL -->
+    <script>
+        // --- ESTADO DO SISTEMA ---
+        let state = { hp: 100, xp: 0, current: 0 };
+        const esc = (s) => s ? String(s).replace(/\\/g, '\\\\').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/\n/g, '\\n').replace(/\r/g, '') : "";
+        
+        const TYPES = { GUIDE: "Directive", WARMUP: "Scan", VOCAB: "Intel", TAPE: "Intercept", GRAMMAR: "Logic", DRILL: "Terminal", BUILDER: "Compile", READER: "Case Study", SPEAKING: "Interrogation", STAND: "Verdict", WRAP: "Archive" };
+
+        function step(type, title, html) { return { type, title, html }; }
+
+        function updateHUD() {
+            const h = document.getElementById('hp-bar'); if(h) h.style.width = Math.max(0, state.hp) + '%';
+            const x = document.getElementById('xp-bar'); if(x) x.style.width = Math.min(100, (state.xp * 2)) + '%';
+            const p = document.getElementById('progress-bar');
+            if (p && typeof lessonData !== 'undefined') {
+                p.style.width = ((state.current + 1) / lessonData.length * 100) + '%';
+            }
+        }
+
+        function insertTag(tag) { 
+            const text = document.getElementById('wb-text'); 
+            if (text) { text.value += (text.value.length > 0 ? '\n' : '') + tag + ' '; text.focus(); } 
+        }
+
+        function shuffleArray(array) {
+            let curId = array.length;
+            while (0 !== curId) {
+                let randId = Math.floor(Math.random() * curId); curId -= 1;
+                let tmp = array[curId]; array[curId] = array[randId]; array[randId] = tmp;
+            }
+            return array;
+        }
+
+        // --- TEMPLATES TEMÁTICOS (THE PROFILER) ---
+        
+        const bGuide = (title, points) => step(TYPES.GUIDE, title, `
+            <div class="max-w-4xl mx-auto space-y-8 animate-in fade-in py-10">
+                <div class="intel-card">
+                    <p class="text-[var(--accent-amber)] font-bold uppercase tracking-[0.3em] text-[10px] mb-6 flex items-center gap-3 font-terminal">
+                        <i class="fas fa-folder-open text-lg"></i> Case #003
+                    </p>
+                    <h2 class="text-4xl md:text-5xl font-black text-white tracking-tighter leading-none mb-10 pb-6 border-b border-white/10 font-terminal uppercase">${title}</h2>
+                    <div class="space-y-6">
+                        ${points.map(p => `<p class="text-lg text-gray-300 font-medium leading-relaxed flex items-start gap-4"><span class="text-[var(--accent-cyan)] font-terminal">></span> ${p}</p>`).join('')}
+                    </div>
+                </div>
+            </div>
+        `);
+
+        // The Fingerprint Scan (Ages Fix)
+        const bFingerprintScan = (title, prompt, optA, optB, starter) => step(TYPES.WARMUP, title, `
+            <div class="max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center space-y-12 animate-in fade-in">
+                <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-[0.4em] mb-2 border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/10 px-4 py-1.5 rounded-sm font-terminal flicker">Identity Verification</p>
+                <h2 class="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-terminal uppercase">${prompt}</h2>
+                
+                <div class="w-full max-w-3xl intel-card py-16 flex flex-col items-center mt-8">
+                    <div class="flex items-center gap-8 mb-10">
+                        <span class="font-bold text-gray-500 font-terminal tracking-widest text-lg" id="mode-aff-age">I HAVE</span>
+                        <div class="relative inline-block w-20 h-10 align-middle select-none">
+                            <input type="checkbox" id="tuner-switch-age" class="tuner-checkbox absolute block w-6 h-6 rounded-full opacity-0 z-10 w-full h-full cursor-pointer" onchange="toggleTuner('age', this, 'Target: I [have] 30 years.', 'Target: I [am] 30 years old.', 'CORRECT. In English, age is a state of being, not possession.')">
+                            <label for="tuner-switch-age" class="tuner-label block overflow-hidden h-10 rounded-full bg-[#222] border border-[#555] cursor-pointer transition-colors duration-300">
+                                <span class="tuner-knob absolute block w-8 h-8 m-1 bg-white rounded-full transition-transform duration-300 ease-in-out"></span>
+                            </label>
+                        </div>
+                        <span class="font-bold text-[var(--accent-cyan)] font-terminal tracking-widest text-lg drop-shadow-[0_0_8px_rgba(0,240,255,0.5)]" id="mode-alt-age">I AM</span>
+                    </div>
+
+                    <div class="bg-black w-full p-8 rounded border border-white/5 font-terminal text-2xl text-left border-l-4 border-l-[var(--accent-red)] transition-colors duration-300" id="tuner-box-age">
+                        <p id="tuner-text-age" class="text-white tracking-wide transition-opacity duration-300">Target: I <span class="text-[var(--accent-red)]">have</span> 30 years.</p>
+                    </div>
+                    
+                    <div id="tuner-fb-age" class="hidden mt-8 text-[var(--accent-cyan)] font-bold text-sm font-terminal text-left w-full">
+                        > VERIFIED: ...
+                    </div>
+                </div>
+
+                <div class="w-full p-6 bg-[#111] border-l-2 border-[var(--accent-amber)] mt-8 text-left">
+                    <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-widest mb-4 font-terminal">Interrogation</p>
+                    <p class="text-xl font-bold text-white mb-2">How old are you?</p>
+                    <p class="text-sm text-gray-500 mt-2 font-terminal">> "${starter}"</p>
+                </div>
+            </div>
+        `);
+
+        // Grammar Core
+        const bLogicGrammar = (title, rule, examples, question, starter) => step(TYPES.GRAMMAR, title, `
+            <div class="max-w-5xl mx-auto space-y-10 animate-in fade-in py-10">
+                <div class="text-center space-y-4 mb-16">
+                    <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-4 border border-[var(--accent-cyan)]/30 bg-[var(--accent-cyan)]/5 inline-block px-5 py-2 font-terminal">Logic Database</p>
+                    <h2 class="text-4xl md:text-5xl font-black text-white tracking-tighter font-terminal uppercase">${title}</h2>
+                </div>
+                <div class="intel-card mb-12 border-l-4 border-[var(--accent-cyan)]">
+                    <p class="text-xl text-white font-medium leading-relaxed">${rule.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-cyan)] font-bold">$1</span>')}</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                    ${examples.map(ex => `
+                        <div class="bg-black border border-white/5 p-8 shadow-lg text-left hover:border-[var(--accent-cyan)]/30 transition-colors">
+                            <p class="text-[10px] font-bold uppercase text-gray-500 tracking-widest mb-4 font-terminal">> ${ex.context}</p>
+                            <p class="text-2xl font-bold text-white leading-tight font-terminal">"${ex.text.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-cyan)]">$1</span>')}"</p>
+                        </div>
+                    `).join('')}
+                </div>
+                ${question ? `
+                <div class="w-full max-w-4xl mx-auto p-8 bg-[#1A1A1A] mt-8 flex flex-col text-left border-l-2 border-[var(--accent-amber)]">
+                    <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-widest mb-4 font-terminal">Live Prompt</p>
+                    <p class="text-xl font-bold text-white mb-4 leading-tight">${question}</p>
+                    <p class="text-sm font-bold text-gray-500 font-terminal">> "${starter}"</p>
+                </div>
+                ` : ''}
+            </div>
+        `);
+
+        // The Alphabet Grid
+        const bAlphabetGrid = (title, instruction) => {
+            const alphabet = [
+                {l: 'A', p: 'ei'}, {l: 'B', p: 'bi'}, {l: 'C', p: 'si'}, {l: 'D', p: 'di'}, {l: 'E', p: 'i'}, {l: 'F', p: 'ef'},
+                {l: 'G', p: 'dji'}, {l: 'H', p: 'eitch'}, {l: 'I', p: 'ai'}, {l: 'J', p: 'djei'}, {l: 'K', p: 'kei'}, {l: 'L', p: 'el'},
+                {l: 'M', p: 'em'}, {l: 'N', p: 'en'}, {l: 'O', p: 'ou'}, {l: 'P', p: 'pi'}, {l: 'Q', p: 'kiu'}, {l: 'R', p: 'ar'},
+                {l: 'S', p: 'es'}, {l: 'T', p: 'ti'}, {l: 'U', p: 'yu'}, {l: 'V', p: 'vi'}, {l: 'W', p: 'dabl-yu'}, {l: 'X', p: 'eks'},
+                {l: 'Y', p: 'uai'}, {l: 'Z', p: 'zi / zed'}
+            ];
+            const html = alphabet.map(a => `
+                <div class="bg-[#111] border border-[var(--accent-cyan)]/20 rounded p-4 flex flex-col items-center justify-center hover:bg-[var(--accent-cyan)]/10 hover:border-[var(--accent-cyan)]/50 transition-colors shadow-sm">
+                    <span class="text-3xl font-bold text-white mb-2 font-terminal">${a.l}</span>
+                    <span class="text-[10px] text-[var(--accent-cyan)] font-mono tracking-widest">[ ${a.p} ]</span>
+                </div>
+            `).join('');
+
+            return step(TYPES.VOCAB, title, `
+                <div class="max-w-5xl mx-auto flex flex-col items-center py-10 animate-in fade-in">
+                    <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-4 font-terminal"><i class="fas fa-font mr-2"></i> Database</p>
+                    <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight uppercase mb-4">${title}</h2>
+                    <p class="text-gray-400 mb-10 text-center font-mono">${instruction}</p>
+                    <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-7 gap-4 w-full">
+                        ${html}
+                    </div>
+                </div>
+            `);
+        }
+
+        // The Safe Cracker Puzzle
+        const bSafeCracker = (title, instructions, targetPin) => step(TYPES.DRILL, title, `
+            <div class="max-w-5xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-in fade-in">
+                <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-[0.4em] mb-2 font-terminal border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/10 px-4 py-1.5 rounded-sm inline-block">Security Bypass</p>
+                <h2 class="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-terminal uppercase">${title}</h2>
+                <p class="text-gray-400 mb-4 max-w-xl">Read the intercepted clues to decode the PIN and bypass the security system.</p>
+
+                <div class="intel-card w-full p-8 flex flex-col md:flex-row gap-12 items-center justify-center border-t-2 border-[var(--accent-amber)]">
+                    
+                    <!-- Clues Panel -->
+                    <div class="w-full md:w-1/2 flex flex-col text-left space-y-4">
+                        <p class="text-[10px] text-[var(--accent-cyan)] font-terminal uppercase tracking-widest border-b border-white/10 pb-3 mb-2">> DECRYPTED CLUES</p>
+                        <ul class="space-y-5 font-mono text-lg text-gray-300 bg-black/50 p-6 rounded border border-white/5 shadow-inner">
+                            ${instructions.map(clue => `<li class="flex items-start gap-3 leading-relaxed"><i class="fas fa-lock-open mt-1.5 text-[var(--accent-amber)] text-sm"></i> <span>${clue}</span></li>`).join('')}
+                        </ul>
+                    </div>
+
+                    <!-- Keypad Section -->
+                    <div class="w-full md:w-1/2 flex flex-col items-center">
+                        <!-- Keypad Input Display -->
+                        <div class="w-full h-16 bg-black border-2 border-[#333] rounded mb-6 flex items-center justify-center font-terminal text-4xl text-white tracking-[0.4em] shadow-inner" id="safe-display"></div>
+
+                        <!-- Keypad -->
+                        <div class="grid grid-cols-3 gap-3 w-full max-w-[280px]" id="safe-keypad">
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('1', ${targetPin.length})">1</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('2', ${targetPin.length})">2</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('3', ${targetPin.length})">3</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('4', ${targetPin.length})">4</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('5', ${targetPin.length})">5</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('6', ${targetPin.length})">6</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('7', ${targetPin.length})">7</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('8', ${targetPin.length})">8</button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('9', ${targetPin.length})">9</button>
+                            <button class="keypad-btn h-16 text-xl" onclick="clearSafeKey()"><i class="fas fa-backspace text-lg text-[var(--accent-red)]"></i></button>
+                            <button class="keypad-btn h-16 text-2xl" onclick="pressSafeKey('0', ${targetPin.length})">0</button>
+                            <button class="keypad-btn h-16 text-xl" onclick="submitSafePin('${targetPin}')"><i class="fas fa-unlock text-lg text-[var(--accent-cyan)]"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div id="safe-fb" class="hidden text-[var(--accent-cyan)] font-terminal text-sm font-bold uppercase tracking-widest">> SYSTEM BYPASSED. ACCESS GRANTED.</div>
+            </div>
+        `);
+
+        // Email Decryptor
+        const bEmailDecryptor = (title) => step(TYPES.VOCAB, title, `
+            <div class="max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center space-y-10 animate-in fade-in">
+                <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-2 font-terminal">Data Parsing</p>
+                <h2 class="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-terminal uppercase">${title}</h2>
+                <p class="text-gray-400">Match the spoken word to the correct symbol in an email address.</p>
+                
+                <div class="intel-card w-full max-w-2xl py-12 px-8 flex flex-col items-center">
+                    <p class="text-3xl font-terminal font-bold mb-10 text-white tracking-wider">
+                        john <span class="censored-block" id="email-b1" onclick="fillEmailBlank(this, '@')">___</span> doe <span class="censored-block" id="email-b2" onclick="fillEmailBlank(this, '.')">___</span> com
+                    </p>
+                    
+                    <div class="flex gap-6 mt-4">
+                        <button class="btn-outline px-8 py-3 text-xl" onclick="activeEmailWord='@'">"AT"</button>
+                        <button class="btn-outline px-8 py-3 text-xl" onclick="activeEmailWord='.'">"DOT"</button>
+                    </div>
+                </div>
+                <div id="email-fb" class="hidden text-[var(--accent-cyan)] font-terminal text-sm font-bold uppercase tracking-widest">> EMAIL ADDRESS DECODED.</div>
+            </div>
+        `);
+
+        // Missing File
+        const bMissingFile = (title, text, answers) => {
+            let htmlText = text.replace(/\[(.*?)\]/g, (match, word) => {
+                return `<span class="censored-block bg-[#222] text-[#222] hover:bg-[#333] hover:text-[#333]" onclick="revealCensored(this, '${esc(word)}')">██████</span>`;
+            });
+            
+            return step(TYPES.DRILL, title, `
+                <div class="max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[60vh] space-y-10 animate-in fade-in">
+                    <p class="text-[10px] font-bold text-[var(--accent-red)] uppercase tracking-[0.4em] mb-2 font-terminal flicker">Classified Document</p>
+                    <h2 class="text-4xl md:text-5xl font-black text-white tracking-tight leading-tight font-terminal uppercase text-center">${title}</h2>
+                    <p class="text-gray-400 text-center">Click the black blocks to reveal the redacted information using context clues.</p>
+                    
+                    <div class="intel-card w-full p-10 text-left border-t-2 border-[var(--accent-red)]">
+                        <p class="font-terminal text-xs text-gray-500 mb-6 border-b border-gray-800 pb-2 uppercase tracking-widest">FILE_ID: 994-ALPHA</p>
+                        <p class="text-2xl text-gray-300 leading-loose font-terminal">
+                            ${htmlText}
+                        </p>
+                    </div>
+                    <div id="censored-fb" class="hidden text-[var(--accent-cyan)] font-terminal text-sm font-bold uppercase tracking-widest text-center">> ALL REDACTIONS REMOVED.</div>
+                </div>
+            `);
+        }
+
+        // Fixer
+        const bFixer = (title, lines, fixes) => {
+            let copy = [...fixes];
+            let html = lines.map(l => l.replace(/\[(.*?)\]/g, (m, w) => `<span class="bug-word" onclick="triggerFixer(this, '${esc(copy.shift())}')">${w}</span>`)).join('<br><br>');
+            return step(TYPES.DRILL, title, `
+            <div class="flex flex-col items-center py-10 animate-in fade-in max-w-4xl mx-auto w-full">
+                <p class="text-[10px] font-bold text-[var(--accent-red)] uppercase tracking-[0.4em] mb-4 bg-[var(--accent-red)]/10 border border-[var(--accent-red)]/30 px-4 py-1.5 rounded-sm font-terminal flicker">Syntax Error</p>
+                <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight mb-8 text-center uppercase">${title}</h2>
+                <p class="text-gray-400 text-lg mb-12 text-center">The intern's report has grammar bugs. Click the red words to fix them.</p>
+                
+                <div class="w-full intel-card relative overflow-hidden text-xl leading-relaxed text-gray-200 border-t-2 border-[var(--accent-red)]">
+                    <p class="font-terminal text-xs text-gray-500 mb-6 border-b border-gray-800 pb-2 uppercase tracking-widest">intern_draft.txt</p>
+                    <div class="font-terminal">${html}</div>
+                    
+                    <div id="fix-panel" class="absolute bottom-0 left-0 w-full bg-[#0A0A0A] border-t border-[var(--accent-cyan)] p-6 transform translate-y-full transition-transform duration-300 flex items-center gap-4 z-20">
+                        <span class="text-[var(--accent-cyan)] font-bold text-lg font-terminal">> PATCH:</span>
+                        <input type="text" id="fix-input" class="bg-[#111] text-white border border-white/20 rounded-sm px-4 py-3 flex-1 text-lg focus:outline-none focus:border-[var(--accent-cyan)] font-terminal uppercase" autocomplete="off">
+                        <button onclick="submitFixer()" class="btn-cyan px-8 py-3 text-sm">APPLY</button>
+                    </div>
+                </div>
+                <div id="fixer-hub" class="hidden mt-8 text-[var(--accent-cyan)] font-terminal font-bold text-sm tracking-widest text-center">> REPORT CORRECTED AND SUBMITTED.</div>
+            </div>`);
+        }
+
+        // Word Builder
+        function bWordBuilder(id, title, instruction, expectedArr) {
+            let wordBtns = shuffleArray([...expectedArr]).map(w => `<span class="wb-pill text-xl uppercase" onclick="moveWbWord(this, '${esc(w)}', '${id}')">${w}</span>`).join('');
+            return step(TYPES.BUILDER, title, `
+                <div class="max-w-4xl mx-auto w-full flex flex-col items-center py-10 animate-in fade-in" data-expected='${JSON.stringify(expectedArr)}' id="wb-data-${id}">
+                    <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-4 border border-[var(--accent-cyan)]/30 bg-[var(--accent-cyan)]/5 px-4 py-1.5 font-terminal">Data Compilation</p>
+                    <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight mb-8 text-center uppercase">${title}</h2>
+                    <p class="text-gray-400 text-lg mb-12 text-center">${instruction}</p>
+                    
+                    <div class="w-full intel-card text-center pb-12 border-t-2 border-[var(--accent-cyan)]">
+                        <div class="wb-dropzone text-2xl font-terminal text-white uppercase" id="wb-dropzone-${id}"></div>
+                        <div class="flex justify-center flex-wrap gap-3 mt-10" id="wb-bank-${id}">
+                            ${wordBtns}
+                        </div>
+                        <button onclick="resetWb('${id}')" class="mt-10 text-xs font-bold text-gray-500 hover:text-white uppercase tracking-widest transition font-terminal"><i class="fas fa-undo mr-2"></i>Reset Sequence</button>
+                    </div>
+                    <div id="wb-fb-${id}" class="hidden mt-8 p-4 text-[var(--accent-cyan)] font-bold text-sm font-terminal tracking-widest">> QUERY CONSTRUCTED SUCCESSFULLY.</div>
+                </div>
+            `);
+        }
+
+        // Easy Reader Board (Apenas Leitura / Análise)
+        const bEasyReaderBoard = (id, title, instruction, readers) => {
+            const folderHtml = readers.map((r, i) => `
+                <div class="intel-card cursor-pointer hover:border-[var(--accent-amber)] transition-colors text-center group" onclick="openEasyReader('${id}', ${i})">
+                    <i class="fas fa-folder text-5xl text-gray-600 group-hover:text-[var(--accent-amber)] mb-4 transition-colors"></i>
+                    <p class="font-terminal font-bold text-white">${r.title}</p>
+                    <p class="text-[10px] text-[var(--accent-red)] font-mono mt-2 font-bold uppercase tracking-widest">Classified</p>
+                </div>
+            `).join('');
+
+            const contentHtml = readers.map((r, i) => `
+                <div id="reader-content-${id}-${i}" class="hidden flex-col items-center w-full animate-in fade-in mt-8">
+                    <div class="w-full bg-[#111] border-l-4 border-[var(--accent-cyan)] p-8 text-left shadow-lg">
+                        <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.3em] mb-4 font-terminal">> FILE CONTENT: ${r.title}</p>
+                        <p class="text-xl text-gray-300 leading-relaxed font-mono">${r.text}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            return step(TYPES.READER, title, `
+                <div class="max-w-5xl mx-auto flex flex-col items-center py-10 animate-in fade-in" id="reader-board-${id}">
+                    <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-4 font-terminal"><i class="fas fa-search mr-2"></i> Case Studies</p>
+                    <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight uppercase mb-4">${title}</h2>
+                    <p class="text-gray-400 mb-10 text-center font-mono">${instruction}</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full mb-4">
+                        ${folderHtml}
+                    </div>
+
+                    <div class="w-full relative min-h-[200px]">
+                        ${contentHtml}
+                    </div>
+                </div>
+            `);
+        }
+
+        // Quiz do Reader com Consulta
+        const bReaderConsultQuiz = (id, title, prompt, refText, options, correctIdx) => step(TYPES.DRILL, title, `
+            <div class="max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-in fade-in">
+                <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-[0.4em] mb-2 border border-white/10 px-4 py-1.5 rounded-sm font-terminal">File Analysis</p>
+                <h2 class="font-terminal text-3xl md:text-4xl font-black text-white tracking-tight leading-tight uppercase">${prompt}</h2>
+                
+                <button onclick="toggleConsultText('${id}')" class="btn-outline px-6 py-3 text-xs tracking-widest"><i class="fas fa-eye mr-2"></i> CLICK HERE TO CHECK THE TEXT</button>
+
+                <div id="consult-text-${id}" class="hidden w-full max-w-2xl bg-[#111] border-l-4 border-[var(--accent-amber)] p-6 text-left shadow-lg transition-all mb-4">
+                    <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-[0.3em] mb-3 font-terminal">> SOURCE FILE</p>
+                    <p class="text-lg text-gray-300 leading-relaxed font-mono">${refText}</p>
+                </div>
+
+                <div class="w-full max-w-2xl space-y-4" id="quiz-options-${id}">
+                    ${options.map((opt, i) => `
+                        <div class="data-row locked-check group" onclick="handleQuizTrial('${id}', this, ${i === correctIdx}, '', '')">
+                            <div class="w-10 h-10 border border-white/10 flex items-center justify-center text-sm font-bold text-gray-500 mr-6 font-terminal group-hover:border-[var(--accent-amber)] transition-colors">${String.fromCharCode(65 + i)}</div>
+                            <span class="text-2xl font-bold text-white font-terminal tracking-widest">${opt}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `);
+
+        // Bamboozle
+        const bFactCheck = (title, statement1, statement2) => step(TYPES.STAND, title, `
+            <div class="max-w-4xl mx-auto w-full flex flex-col items-center py-10 animate-in fade-in">
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.4em] mb-6 border border-white/10 px-4 py-1.5 rounded-full font-terminal">Verification</p>
+                <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight mb-16 text-center uppercase">${title}</h2>
+                
+                <div id="bamb-q1" class="w-full intel-card text-center mb-8 border-t-2 border-white">
+                    <p class="text-2xl font-bold text-white leading-relaxed mb-10 font-terminal">"${statement1.text.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-cyan)]">$1</span>')}"</p>
+                    <div class="flex gap-6 justify-center">
+                        <button class="btn-cyan px-10 py-3 text-sm" onclick="checkBamb(1, ${statement1.isTrue})">TRUE</button>
+                        <button class="btn-outline px-10 py-3 text-sm" onclick="checkBamb(1, ${!statement1.isTrue})">FALSE</button>
+                    </div>
+                </div>
+                
+                <div id="bamb-q2" class="hidden w-full intel-card text-center mb-8 border-t-2 border-[var(--accent-cyan)]">
+                    <p class="text-2xl font-bold text-white leading-relaxed mb-10 font-terminal">"${statement2.text.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-cyan)]">$1</span>')}"</p>
+                    <div class="flex gap-6 justify-center">
+                        <button class="btn-cyan px-10 py-3 text-sm" onclick="checkBamb(2, ${statement2.isTrue})">TRUE</button>
+                        <button class="btn-outline px-10 py-3 text-sm" onclick="checkBamb(2, ${!statement2.isTrue})">FALSE</button>
+                    </div>
+                </div>
+                
+                <div id="bamb-fb" class="hidden mt-8 text-[var(--accent-cyan)] font-bold text-sm text-center font-terminal tracking-widest">> ANALYSIS COMPLETE.</div>
+            </div>
+        `);
+
+        // Social Quiz (MCQ)
+        const bSocialQuiz = (id, title, prompt, options, correctIdx, followup, starter) => step(TYPES.DRILL, title, `
+            <div class="max-w-4xl mx-auto flex flex-col items-center justify-center min-h-[60vh] text-center space-y-12 animate-in fade-in">
+                <p class="text-[10px] font-bold text-gray-500 uppercase tracking-[0.4em] mb-2 border border-white/10 px-4 py-1.5 rounded-sm font-terminal">Analysis</p>
+                <h2 class="font-terminal text-4xl md:text-5xl font-black text-white tracking-tight leading-tight uppercase">${prompt}</h2>
+                
+                <div class="w-full max-w-2xl space-y-4" id="quiz-options-${id}">
+                    ${options.map((opt, i) => `
+                        <div class="data-row locked-check group" onclick="handleQuizTrial('${id}', this, ${i === correctIdx}, '${esc(followup)}', '${esc(starter)}')">
+                            <div class="w-10 h-10 border border-white/10 flex items-center justify-center text-sm font-bold text-gray-500 mr-6 font-terminal group-hover:border-[var(--accent-amber)] transition-colors">${String.fromCharCode(65 + i)}</div>
+                            <span class="text-2xl font-bold text-white font-terminal tracking-widest">${opt}</span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div id="followup-box-${id}" class="hidden w-full max-w-2xl p-8 bg-[#111] border-l-2 border-[var(--accent-cyan)] mt-8 text-left">
+                    <p class="text-[10px] font-bold text-[var(--accent-cyan)] uppercase tracking-widest mb-4 font-terminal">Discuss</p>
+                    <p class="text-xl font-bold text-white mb-2">${followup}</p>
+                    ${starter ? `<p class="text-sm font-bold text-gray-500 italic mt-2 font-terminal">> "${starter}"</p>` : ''}
+                </div>
+            </div>
+        `);
+
+        const bRoleplay = (title, prompt, bullets, starter) => step(TYPES.SPEAKING, title, `
+            <div class="max-w-4xl mx-auto w-full flex flex-col items-center justify-center min-h-[60vh] text-center animate-in fade-in py-10 relative">
+                <div class="z-10 flex flex-col items-center w-full">
+                    <div class="flex items-center justify-center w-24 h-24 bg-[#111] border border-white/10 mb-8 rounded-full">
+                        <i class="fas fa-microphone text-4xl text-[var(--accent-amber)]"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-[0.4em] mb-4 font-terminal flicker">Live Interrogation</p>
+                    <h2 class="font-terminal text-4xl md:text-6xl font-black tracking-tight text-white leading-tight mb-12 uppercase">${prompt}</h2>
+                    
+                    <div class="w-full max-w-2xl bg-[#111] p-8 border border-white/5 mt-4 text-left border-l-2 border-[var(--accent-amber)]">
+                        <p class="text-[10px] font-bold text-[var(--accent-amber)] uppercase tracking-widest mb-4 font-terminal">Speaking Guide (Hints)</p>
+                        <p class="text-xl font-medium text-white italic font-terminal">"${starter}"</p>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        const bWrap = () => step(TYPES.WRAP, "Case Closed", `
+            <div class="text-center max-w-3xl mx-auto flex flex-col items-center justify-center min-h-[60vh] animate-in fade-in">
+                <div class="w-40 h-40 bg-[var(--accent-amber)] mx-auto flex items-center justify-center text-7xl text-black mb-10 shadow-[0_0_60px_rgba(255,183,3,0.3)]">
+                    <i class="fas fa-folder-closed"></i>
+                </div>
+                <h1 class="font-terminal text-6xl md:text-8xl font-black text-white tracking-tighter mb-6 uppercase">Case Closed</h1>
+                <p class="text-xl text-gray-400 mb-16 font-medium">You have successfully collected all data profiles.</p>
+                <button onclick="goHome()" class="btn-outline px-10 py-4 tracking-widest text-sm">Return to Headquarters</button>
+            </div>
+        `);
+
+        // --- LESSON DATA (A1 The Profiler) ---
+        const lessonData = [
+            bGuide("The Suspect File", [
+                "Target: A1 (Beginner).", 
+                "Focus: Personal Information (Ages, Phones, Email).",
+                "Theme: Interrogation, Profiling, Spelling.",
+                "Goal: Extract and report personal data accurately."
+            ]),
+
+            bFingerprintScan("Identity Check", "How old are you?", "I HAVE", "I AM", "I am... years old."),
+
+            bLogicGrammar("Age Protocol", "In English, we use the Verb [To Be] (am/is/are) for age. Do NOT use the verb 'Have'.", [
+                {text: "I [am] 25 years old.", context: "Correct (I am)"},
+                {text: "He [has] 30 years.", context: "Wrong (Do not use have)"}
+            ], "How old is your best friend?", "My best friend is..."),
+
+            bSocialQuiz("comp1", "Age Identification", "Look at the suspect. What is the correct sentence?", [
+                "She has 40 years old.", 
+                "She is 40 years old.", 
+                "She is 40 years."
+            ], 1, "How old is your mother?", "My mother is..."),
+
+            bLogicGrammar("Number Verification", "Tens vs Teens. Be careful with pronunciation!", [
+                {text: "13 (Thir[teen]) vs 30 (Thir[ty])", context: "13 vs 30"},
+                {text: "14 (Four[teen]) vs 40 (For[ty])", context: "14 vs 40"}
+            ]),
+
+            bLogicGrammar("Comms Protocol", "When saying phone numbers in English, say each number individually. For '0', say [Oh]. For repeated numbers, say [Double].", [
+                {text: "0770", context: "Say: Oh, Double Seven, Oh"},
+                {text: "994", context: "Say: Double Nine, Four"}
+            ]),
+
+            bSafeCracker("Secure Vault", [
+                "Digit 1: Three.",
+                "Digits 2 & 3: Double Oh.",
+                "Digit 4: The number after seven."
+            ], "3008"),
+
+            bEmailDecryptor("Cyber Trace"),
+
+            bWordBuilder("wb1", "Query Construction", "Build the question to ask for a phone number.", ["What", "is", "your", "phone", "number", "?"]),
+
+            bAlphabetGrid("The Alphabet", "Learn the phonetic sounds of the English alphabet."),
+
+            bSocialQuiz("plate1", "License Plate Track", "The suspect's license plate was intercepted as: A - E - I. Which one is it?", [
+                "E - I - A", 
+                "A - E - I", 
+                "I - E - A"
+            ], 1, "How do you spell your first name?", "My name is spelled..."),
+
+            bFactCheck("Data Verification", 
+                {text: "The letter 'J' is pronounced like [Gai].", isTrue: false}, 
+                {text: "The letter 'G' is pronounced like [Jee].", isTrue: true}
+            ),
+
+            bMissingFile("Classified Report", "The suspect is a man. He is [35] years old. His phone number is [07700900461]. His email is john[at]mail[dot]com.", ["35", "07700900461", "at", "dot"]),
+
+            bFixer("Intern's Report", [
+                "The suspect [have] 45 years old.",
+                "His phone number [are] 0770.",
+                "His name [are] James."
+            ], [ "is", "is", "is" ]),
+
+            bLogicGrammar("Interrogation Queries", "Use these question words to extract information: [Who] (person), [How old] (age), [What] (things/numbers).", [
+                {text: "[Who] is he?", context: "Asking for a person"},
+                {text: "[How old] are you?", context: "Asking for age"},
+                {text: "[What] is your email?", context: "Asking for a thing"}
+            ]),
+
+            bWordBuilder("wb2", "Query Construction II", "Build the question to ask for an age.", ["How", "old", "are", "you", "?"]),
+
+            bEasyReaderBoard("readers1", "Intercepted Files", "Click the folders to read the intercepted communications before the interrogation.", [
+                {
+                    title: "File 01: Driver",
+                    text: "The suspect is James. He is 32 years old. He drives a black car. His phone number is 07700 900 461."
+                },
+                {
+                    title: "File 02: Informant",
+                    text: "My name is Sarah. I am from London. I saw the suspect at the bank. He is tall and wears a hat."
+                },
+                {
+                    title: "File 03: The Code",
+                    text: "Intercepted message: We meet tomorrow. The secret password is B-A-K-E-R. Delete this message."
+                }
+            ]),
+
+            bReaderConsultQuiz("rq1", "File 01 Analysis", "How old is James?", "The suspect is James. He is 32 years old. He drives a black car. His phone number is 07700 900 461.", ["32", "23", "42"], 0),
+            
+            bReaderConsultQuiz("rq2", "File 02 Analysis", "Where is Sarah from?", "My name is Sarah. I am from London. I saw the suspect at the bank. He is tall and wears a hat.", ["Paris", "New York", "London"], 2),
+            
+            bReaderConsultQuiz("rq3", "File 03 Analysis", "What is the password?", "Intercepted message: We meet tomorrow. The secret password is B-A-K-E-R. Delete this message.", ["MAKER", "BAKER", "WATER"], 1),
+
+            bLogicGrammar("Survival Cheat Sheet", "If the suspect speaks too fast, use these phrases to maintain the connection.", [
+                {text: "Can you [repeat] that, please?", context: "To hear it again"},
+                {text: "How do you [spell] that?", context: "To get the exact letters"}
+            ]),
+
+            bRoleplay("The Witness", "You are the police officer. Ask me for my Name, Age, and Phone Number.", null, "Hello. What is your name? How old are you? What is your phone number?"),
+
+            bRoleplay("The Suspect", "I am the police officer. I will interrogate you. Give your real info and spell your last name.", null, "My name is... I am... My phone number is... My last name is spelled..."),
+
+            bFactCheck("Final Verification", 
+                {text: "In English, we say 'I am 20 years old', not 'I have 20 years'.", isTrue: true}, 
+                {text: "For the number '0' in a phone number, we usually say 'Zero'.", isTrue: false}
+            ),
+
+            bWrap()
+        ];
+
+        // --- LÓGICA DE RUNTIME ---
+        function toggleElementClass(id, action, className) {
+            const el = document.getElementById(id);
+            if (el) {
+                if (action === 'add') el.classList.add(className);
+                else if (action === 'remove') el.classList.remove(className);
+            }
+        }
+
+        function startMission() {
+            toggleElementClass('dashboard', 'add', 'hidden'); toggleElementClass('dashboard', 'remove', 'flex');
+            toggleElementClass('hud-top', 'remove', 'hidden'); toggleElementClass('hud-top', 'add', 'flex');
+            toggleElementClass('mission-arena', 'remove', 'hidden'); toggleElementClass('mission-arena', 'add', 'flex');
+            toggleElementClass('nav-console', 'remove', 'hidden'); toggleElementClass('nav-console', 'add', 'flex');
+            buildLessonNavigator(); renderStep();
+        }
+
+        function goHome() {
+            toggleElementClass('dashboard', 'remove', 'hidden'); toggleElementClass('dashboard', 'add', 'flex');
+            toggleElementClass('hud-top', 'add', 'hidden'); toggleElementClass('hud-top', 'remove', 'flex');
+            toggleElementClass('mission-arena', 'add', 'hidden'); toggleElementClass('mission-arena', 'remove', 'flex');
+            toggleElementClass('nav-console', 'add', 'hidden'); toggleElementClass('nav-console', 'remove', 'flex');
+            state.current = 0; updateHUD();
+            document.getElementById('whiteboard')?.classList.remove('active');
+            document.getElementById('lesson-navigator')?.classList.remove('active');
+            document.getElementById('teacher-hud')?.classList.remove('active');
+        }
+
+        function renderStep() {
+            if (!lessonData || !lessonData[state.current]) return;
+            const step = lessonData[state.current];
+            const pTitle = document.getElementById('console-title'); if(pTitle) pTitle.innerText = step.title;
+            const content = document.getElementById('mission-content'); if(content) content.innerHTML = `<div class="w-full max-w-7xl mx-auto">${step.html}</div>`;
+            updateHUD();
+            
+            const navList = document.getElementById('nav-steps-list');
+            if (navList) {
+                Array.from(navList.children).forEach((btn, i) => {
+                    if(i === state.current) { btn.classList.add('bg-white/10', 'text-[var(--accent-amber)]', 'border-l-2', 'border-[var(--accent-amber)]'); btn.classList.remove('text-[#888]'); } 
+                    else { btn.classList.remove('bg-white/10', 'text-[var(--accent-amber)]', 'border-l-2', 'border-[var(--accent-amber)]'); btn.classList.add('text-[#888]'); }
+                });
+            }
+            if (step.type === TYPES.BUILDER) setTimeout(setupWb, 100);
+        }
+
+        function nextStep() { if (state.current < lessonData.length - 1) { state.current++; renderStep(); } else { goHome(); } }
+        function prevStep() { if (state.current > 0) { state.current--; renderStep(); } }
+        
+        function toggleWhiteboard() { document.getElementById('whiteboard').classList.toggle('active'); document.getElementById('lesson-navigator')?.classList.remove('active'); document.getElementById('teacher-hud')?.classList.remove('active'); document.getElementById('smart-dict')?.classList.remove('active'); }
+        function toggleLessonNavigator() { document.getElementById('lesson-navigator').classList.toggle('active'); document.getElementById('whiteboard')?.classList.remove('active'); document.getElementById('teacher-hud')?.classList.remove('active'); document.getElementById('smart-dict')?.classList.remove('active'); }
+        function toggleDict() { document.getElementById('smart-dict').classList.toggle('active'); document.getElementById('whiteboard')?.classList.remove('active'); document.getElementById('lesson-navigator')?.classList.remove('active'); document.getElementById('teacher-hud')?.classList.remove('active'); }
+        function toggleTeacherHUD() { document.getElementById('teacher-hud').classList.toggle('active'); document.getElementById('whiteboard')?.classList.remove('active'); document.getElementById('lesson-navigator')?.classList.remove('active'); document.getElementById('smart-dict')?.classList.remove('active'); }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) { document.documentElement.requestFullscreen().catch(err => console.log(err)); } 
+            else { if (document.exitFullscreen) document.exitFullscreen(); }
+        }
+
+        // --- LÓGICA DOS MINIJOGOS ---
+
+        // Tuner (Age)
+        function toggleTuner(id, checkbox, textAff, textAlt, feedback) {
+            const textEl = document.getElementById(`tuner-text-${id}`);
+            const boxEl = document.getElementById(`tuner-box-${id}`);
+            const aff = document.getElementById(`mode-aff-${id}`);
+            const alt = document.getElementById(`mode-alt-${id}`);
+            textEl.style.opacity = 0;
+            setTimeout(() => {
+                if(checkbox.checked) {
+                    aff.classList.replace('text-gray-500', 'text-white'); alt.classList.replace('text-white', 'text-[var(--accent-cyan)]');
+                    textEl.innerHTML = textAlt.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-cyan)] font-bold">$1</span>'); 
+                    boxEl.classList.replace('border-l-[var(--accent-red)]', 'border-l-[var(--accent-cyan)]');
+                    document.getElementById(`tuner-fb-${id}`).classList.remove('hidden');
+                    shootConfetti(); state.xp += 2; updateHUD();
+                } else {
+                    aff.classList.replace('text-white', 'text-gray-500'); alt.classList.replace('text-[var(--accent-cyan)]', 'text-white');
+                    textEl.innerHTML = textAff.replace(/\[(.*?)\]/g, '<span class="text-[var(--accent-red)] font-bold">$1</span>'); 
+                    boxEl.classList.replace('border-l-[var(--accent-cyan)]', 'border-l-[var(--accent-red)]');
+                    document.getElementById(`tuner-fb-${id}`).classList.add('hidden');
+                }
+                textEl.style.opacity = 1;
+            }, 200);
+        }
+
+        // Safe Cracker Puzzle
+        let currentSafeInput = "";
+        function pressSafeKey(num, limit) {
+            if(currentSafeInput.length < limit) {
+                currentSafeInput += num;
+                document.getElementById('safe-display').innerText = currentSafeInput;
+            }
+        }
+        function clearSafeKey() {
+            currentSafeInput = currentSafeInput.slice(0, -1);
+            document.getElementById('safe-display').innerText = currentSafeInput;
+        }
+        function submitSafePin(target) {
+            if(currentSafeInput === target) {
+                document.getElementById('safe-fb').classList.remove('hidden');
+                document.getElementById('safe-display').classList.add('text-[var(--accent-cyan)]', 'border-[var(--accent-cyan)]');
+                shootConfetti(); state.xp += 5; updateHUD();
+            } else {
+                const display = document.getElementById('safe-display');
+                display.classList.add('shake', 'border-[var(--accent-red)]', 'text-[var(--accent-red)]');
+                setTimeout(() => display.classList.remove('shake', 'border-[var(--accent-red)]', 'text-[var(--accent-red)]'), 400);
+                state.hp -= 10; updateHUD();
+                // Auto-clear após erro
+                setTimeout(() => {
+                    currentSafeInput = "";
+                    display.innerText = "";
+                }, 500);
+            }
+        }
+
+        // Email Decryptor
+        let activeEmailWord = ""; let emailFilled = 0;
+        function fillEmailBlank(el, expected) {
+            if(el.classList.contains('revealed')) return;
+            if(activeEmailWord === expected) {
+                el.innerText = activeEmailWord; el.classList.add('revealed');
+                activeEmailWord = ""; emailFilled++;
+                if(emailFilled === 2) { document.getElementById('email-fb').classList.remove('hidden'); shootConfetti(); state.xp += 2; updateHUD(); }
+            } else if (activeEmailWord !== "") {
+                el.classList.add('shake', 'text-[var(--accent-red)]'); setTimeout(() => el.classList.remove('shake', 'text-[var(--accent-red)]'), 400);
+                state.hp -= 5; updateHUD();
+            }
+        }
+
+        // Censored Blocks
+        let censoredRevealed = 0;
+        function revealCensored(el, word) {
+            if(el.classList.contains('revealed')) return;
+            el.innerText = word; el.classList.add('revealed');
+            censoredRevealed++;
+            // Check if all are revealed in the container
+            const container = el.closest('.intel-card');
+            const total = container.querySelectorAll('.censored-block').length;
+            if(censoredRevealed === total) {
+                document.getElementById('censored-fb').classList.remove('hidden');
+                shootConfetti(); state.xp += 5; updateHUD(); censoredRevealed = 0;
+            }
+        }
+
+        // Fixer
+        let activeBug = null; let expectedFix = ""; let bugsFixed = 0;
+        function triggerFixer(el, answer) {
+            if(el.classList.contains('bug-fixed')) return;
+            activeBug = el; expectedFix = answer;
+            const panel = document.getElementById('fix-panel'); panel.classList.remove('translate-y-full');
+            document.getElementById('fix-input').value = ''; document.getElementById('fix-input').focus();
+        }
+        function submitFixer() {
+            const input = document.getElementById('fix-input').value.trim().toLowerCase();
+            const panel = document.getElementById('fix-panel');
+            if(input === expectedFix.toLowerCase()) {
+                activeBug.innerText = expectedFix; activeBug.classList.remove('bug-word'); activeBug.classList.add('bug-fixed');
+                panel.classList.add('translate-y-full');
+                const container = activeBug.closest('.intel-card');
+                const remaining = container.querySelectorAll('.bug-word').length;
+                if(remaining === 0) { shootConfetti(); state.xp += 2; updateHUD(); document.getElementById('fixer-hub').classList.remove('hidden');}
+            } else {
+                const inputEl = document.getElementById('fix-input'); inputEl.classList.add('shake', 'border-[var(--accent-red)]');
+                state.hp -= 10; updateHUD();
+                setTimeout(() => inputEl.classList.remove('shake', 'border-[var(--accent-red)]'), 400);
+            }
+        }
+        document.getElementById('fix-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') submitFixer(); });
+
+        // Word Builder
+        let wbState = {};
+        function setupWb() {
+            document.querySelectorAll('[id^="wb-data-"]').forEach(el => {
+                const id = el.id.replace('wb-data-', '');
+                wbState[id] = { current: [], expected: JSON.parse(el.dataset.expected) };
+            });
+        }
+        function moveWbWord(pill, word, id) {
+            if(pill.classList.contains('used')) return;
+            if(!wbState[id]) return;
+            wbState[id].current.push(word); pill.classList.add('used');
+            const dz = document.getElementById(`wb-dropzone-${id}`);
+            const newPill = document.createElement('span'); newPill.className = 'pill-in-zone'; newPill.innerText = word; dz.appendChild(newPill);
+            if(wbState[id].current.length === wbState[id].expected.length) {
+                let win = wbState[id].current.every((val, index) => val === wbState[id].expected[index]);
+                if(win) { document.getElementById(`wb-fb-${id}`).classList.remove('hidden'); state.xp += 2; updateHUD(); shootConfetti(); }
+                else { dz.classList.add('shake', 'border-[var(--accent-red)]'); state.hp -= 10; updateHUD(); setTimeout(() => dz.classList.remove('shake', 'border-[var(--accent-red)]'), 400); }
+            }
+        }
+        function resetWb(id) {
+            if(!wbState[id]) return;
+            wbState[id].current = []; document.getElementById(`wb-dropzone-${id}`).innerHTML = ''; document.getElementById(`wb-fb-${id}`).classList.add('hidden');
+            document.getElementById(`wb-bank-${id}`).querySelectorAll('.wb-pill').forEach(p => p.classList.remove('used'));
+        }
+
+        // MCQ (General)
+        function handleQuizTrial(id, row, isCorrect, followup, starter) {
+            if(row.classList.contains('locked-check')) {
+                const parent = row.parentElement; 
+                Array.from(parent.children).forEach(child => { child.onclick = null; child.classList.add('opacity-40', 'cursor-default'); child.classList.remove('locked-check');});
+                row.classList.remove('opacity-40'); 
+                
+                if(isCorrect) {
+                    row.classList.add('correct'); state.xp += 2; updateHUD(); shootConfetti();
+                    const fBox = document.getElementById(`followup-box-${id}`); if(fBox && followup) fBox.classList.remove('hidden');
+                } else { row.classList.add('wrong'); state.hp -= 10; updateHUD(); }
+            }
+        }
+
+        // Bamboozle
+        function checkBamb(q, isCorrect) {
+            const container = document.getElementById(`bamb-q${q}`);
+            if(isCorrect) {
+                container.classList.add('hidden');
+                if(q === 1) document.getElementById('bamb-q2').classList.remove('hidden');
+                else { document.getElementById('bamb-fb').classList.remove('hidden'); shootConfetti(); }
+            } else {
+                container.classList.add('shake', 'border-4', 'border-[var(--accent-red)]');
+                setTimeout(() => container.classList.remove('shake', 'border-4', 'border-[var(--accent-red)]'), 400);
+            }
+        }
+
+        // Easy Readers Actions
+        function openEasyReader(boardId, readerIdx) {
+            document.querySelectorAll(`[id^="reader-content-${boardId}-"]`).forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll(`[id^="reader-content-${boardId}-"]`).forEach(el => el.classList.remove('flex'));
+            
+            const target = document.getElementById(`reader-content-${boardId}-${readerIdx}`);
+            target.classList.remove('hidden');
+            target.classList.add('flex');
+        }
+
+        // Consult Text Toggle
+        function toggleConsultText(id) {
+            const el = document.getElementById(`consult-text-${id}`);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                el.classList.add('animate-in', 'fade-in');
+            } else {
+                el.classList.add('hidden');
+            }
+        }
+
+        // Smart Dict
+        document.addEventListener('dblclick', async (e) => {
+            if(e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const selection = window.getSelection().toString().trim();
+            if(selection && /^[A-Za-z]+$/.test(selection)) { 
+                const panel = document.getElementById('smart-dict');
+                const content = document.getElementById('dict-content');
+                panel.classList.remove('translate-x-full');
+                content.innerHTML = `<div class="flex justify-center mt-10"><span class="text-[var(--accent-cyan)] font-bold animate-pulse font-terminal">> QUERYING INTERPOL DB...</span></div>`;
+                
+                try {
+                    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${selection.toLowerCase()}`);
+                    const data = await response.json();
+                    if(data.title) { content.innerHTML = `<p class="text-center text-[var(--accent-red)] mt-10 font-bold font-terminal">> 404: NO RECORD FOUND.</p>`; return; }
+                    
+                    const word = data[0].word; const phonetic = data[0].phonetic || '';
+                    const meaningsHtml = data[0].meanings.map(m => `
+                        <div class="mb-4 bg-black p-5 rounded border border-white/5 shadow-sm relative">
+                            <span class="text-[var(--accent-amber)] text-xs font-bold uppercase tracking-widest font-terminal">> ${m.partOfSpeech}</span>
+                            <p class="mt-2 text-white text-lg leading-relaxed font-terminal">${m.definitions[0].definition}</p>
+                        </div>
+                    `).join('');
+                    
+                    content.innerHTML = `<h3 class="text-4xl font-terminal font-black text-[var(--accent-cyan)] capitalize mb-1">${word}</h3><p class="text-gray-500 font-terminal mb-8">${phonetic}</p>${meaningsHtml}`;
+                } catch(err) { content.innerHTML = `<p class="text-[var(--accent-red)] mt-10 font-bold font-terminal">> CONNECTION LOST.</p>`; }
+            }
+        });
+
+        function buildLessonNavigator() {
+            const list = document.getElementById('nav-steps-list'); if (!list) return;
+            list.innerHTML = '';
+            lessonData.forEach((step, i) => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left p-3 rounded flex items-center gap-3 transition-all font-terminal ${i === state.current ? 'bg-white/10 text-[var(--accent-amber)] font-bold border-l-2 border-[var(--accent-amber)] shadow-sm' : 'text-[#888] hover:bg-white/5'}`;
+                btn.innerHTML = `<span class="text-[10px] w-4 opacity-50">${i+1}</span><div class="flex flex-col truncate"><span class="text-xs truncate">${step.title}</span></div>`;
+                btn.onclick = () => { state.current = i; renderStep(); toggleLessonNavigator(); };
+                list.appendChild(btn);
+            });
+        }
+
+        function triggerPraise(main, sub) {
+            document.getElementById('teacher-hud')?.classList.remove('active'); 
+            const overlay = document.getElementById('praise-overlay'); const card = document.getElementById('praise-card');
+            
+            if(main === 'VERIFIED') {
+                card.className = "bg-[#141414] p-16 text-center transform scale-50 transition-transform duration-500 border-t-4 border-[var(--accent-cyan)] shadow-[0_10px_50px_rgba(0,240,255,0.2)]";
+                document.getElementById('praise-main').className = "text-5xl md:text-7xl font-black tracking-tighter uppercase mb-4 text-[var(--accent-cyan)] font-terminal";
+            } else {
+                card.className = "bg-[#141414] p-16 text-center transform scale-50 transition-transform duration-500 border-t-4 border-[var(--accent-amber)] shadow-[0_10px_50px_rgba(255,183,3,0.2)]";
+                document.getElementById('praise-main').className = "text-5xl md:text-7xl font-black tracking-tighter uppercase mb-4 text-[var(--accent-amber)] font-terminal";
+            }
+            
+            document.getElementById('praise-main').innerText = main; document.getElementById('praise-sub').innerText = sub;
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            setTimeout(() => card.classList.replace('scale-50', 'scale-100'), 50); shootConfetti();
+            setTimeout(() => { card.classList.replace('scale-100', 'scale-50'); overlay.classList.add('opacity-0', 'pointer-events-none'); }, 2500);
+        }
+
+        function shootConfetti() {
+            const cCanvas = document.getElementById('confetti-canvas'); const cCtx = cCanvas.getContext('2d');
+            cCanvas.width = window.innerWidth; cCanvas.height = window.innerHeight;
+            const pieces = []; const colors = ['#FFB703', '#00F0FF', '#FFFFFF'];
+            for(let i=0; i<60; i++) pieces.push({ x: cCanvas.width/2, y: cCanvas.height/2+100, vx: (Math.random()-0.5)*20, vy: (Math.random()-1)*20-5, size: Math.random()*6+2, color: colors[Math.floor(Math.random()*colors.length)], rot: Math.random()*360, rotSpeed: (Math.random()-0.5)*10 });
+            let animationId;
+            function animateC() {
+                cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height); let active = false;
+                pieces.forEach(p => {
+                    p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.rot += p.rotSpeed; if(p.y < cCanvas.height) active = true;
+                    cCtx.save(); cCtx.translate(p.x, p.y); cCtx.rotate(p.rot*Math.PI/180); cCtx.fillStyle = p.color; 
+                    cCtx.fillRect(-p.size/2, -p.size/2, p.size, p.size); cCtx.restore(); // Square data bits
+                });
+                if(active) animationId = requestAnimationFrame(animateC); else cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+            }
+            animateC();
+        }
+        
+        window.onload = () => { updateHUD(); buildLessonNavigator(); goHome(); };
+    </script>
+</body>
+</html>
